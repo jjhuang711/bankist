@@ -68,8 +68,8 @@ const account2 = {
     "2020-01-25T14:18:46.235Z",
     "2020-02-05T16:33:06.386Z",
     "2020-04-10T14:43:26.374Z",
-    "2020-06-25T18:49:59.371Z",
-    "2020-07-26T12:01:20.894Z",
+    "2022-11-26T18:49:59.371Z",
+    "2022-11-30T12:01:20.894Z",
   ],
   currency: "USD",
   locale: "en-US",
@@ -107,7 +107,85 @@ const inputLoanAmount = document.querySelector(".form__input--loan-amount");
 const inputCloseUsername = document.querySelector(".form__input--user");
 const inputClosePin = document.querySelector(".form__input--pin");
 
+// Function for formatting currency
+const formatCurrency = function (value, locale, currency) {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: currency,
+  }).format(value);
+};
+
+// Function for displaying time
+const formatMovementDate = function (date, locale) {
+  // function to calculate day elapsed
+  const calcDaysPassed = (date1, date2) =>
+    Math.round(Math.abs(date2 - date1) / (1000 * 60 * 60 * 24));
+
+  const DaysPassed = calcDaysPassed(date, new Date());
+
+  if (DaysPassed === 0) return `Today`;
+  else if (DaysPassed === 1) return `Yesterday`;
+  else if (DaysPassed <= 7) return `${DaysPassed} days ago`;
+  else {
+    return new Intl.DateTimeFormat(locale).format(date);
+
+    // Old formatting method w/o intl api
+    // const movDate = `${date.getDate()}`.padStart(2, 0);
+    // // take note that month is 0 base, so need to +1
+    // const movMonth = `${date.getMonth() + 1}`.padStart(2, 0);
+    // const movYear = date.getFullYear();
+    // return `${movDate}/${movMonth}/${movYear}`;
+  }
+};
+
 // Good practice to pass data into a function and work from there, instead of doing it straight on global scope.
+const displayMovement = function (acc, sort = false) {
+  // Clear all the html inside the movements container
+  containerMovements.innerHTML = "";
+
+  // Combine movement with its original index using map.
+  // mappedMov = [[mov,i], [mov,i] ...]
+  const mappedMov = acc.movements.map((mov, i) => [mov, i]);
+
+  // For sorting, if sort is true, sort by the element at [0] (which is the movement), otherwise stay the same unsorted
+  const movs = sort ? mappedMov.slice().sort((a, b) => a[0] - b[0]) : mappedMov;
+
+  // To sort the dates as well, get the index reference from the movs.
+  // Remember that the index was stored earlier at index [1] for each mov
+  const indexRef = movs.map((mov) => mov[1]);
+
+  // "Sort" the date by creating a new array, mapping the index of the mov (sorted/unsorted) to the existing movementsDates array
+  const dateSort = sort
+    ? indexRef.map((i) => acc.movementsDates[i])
+    : acc.movementsDates;
+
+  // Since movs has nested arrays, when using forEach, we need to deconstruct the argument
+  movs.forEach(function ([mov, _], i) {
+    // A variable to change class name for the HTML (note that the name of the class for the movement row depends if its deposit or withdrawal)
+    const type = mov > 0 ? `deposit` : `withdrawal`;
+
+    // Creating date to display
+    const movementsDate = new Date(dateSort[i]);
+    const displayDate = formatMovementDate(movementsDate, acc.locale);
+
+    // Creating formatted movements
+    const formattedMov = formatCurrency(mov, acc.locale, acc.currency);
+
+    // A lateral template variable to keep the html that we want to add later
+    const html = `
+    <div class="movements__row">
+    <div class="movements__type movements__type--${type}">${i + 1} ${type}</div>
+    <div class="movements__date">${displayDate}</div>
+    <div class="movements__value">${formattedMov}</div>
+    </div>
+    `;
+
+    // Insert an adjacent html after the begin of movements class container
+    containerMovements.insertAdjacentHTML("afterbegin", html);
+  });
+};
+
+/* //old version
 const displayMovement = function (acc, sort = false) {
   // Clear all the html inside the movements container
   containerMovements.innerHTML = "";
@@ -137,18 +215,23 @@ const displayMovement = function (acc, sort = false) {
     <div class="movements__value">${mov.toFixed(2)}€</div>
     </div>
     `;
-
-    // Insert an adjacent html after the begin of movements class container
-    containerMovements.insertAdjacentHTML("afterbegin", html);
-  });
+  acc.balance = acc.movements.reduce(function (acc, mov) {
+    return acc + mov;
+  }, 0);
+  labelBalance.textContent = `${acc.balance.toFixed(2)} €`;
 };
+*/
 
 // Function to calculate and display balance
 const calcDisplayBalance = function (acc) {
   acc.balance = acc.movements.reduce(function (acc, mov) {
     return acc + mov;
   }, 0);
-  labelBalance.textContent = `${acc.balance.toFixed(2)} €`;
+  labelBalance.textContent = formatCurrency(
+    acc.balance,
+    acc.locale,
+    acc.currency
+  );
 };
 
 // Function to calculate and display summary: IN, OUT and INTEREST
@@ -157,13 +240,17 @@ const calcDisplaySummary = function (acc) {
   const incomes = acc.movements
     .filter((mov) => mov > 0)
     .reduce((acc, mov) => acc + mov);
-  labelSumIn.textContent = `${incomes.toFixed(2)}€`;
+  labelSumIn.textContent = formatCurrency(incomes, acc.locale, acc.currency);
 
   // All movements <0 is OUT
   const out = acc.movements
     .filter((mov) => mov < 0)
     .reduce((acc, mov) => acc + mov, 0);
-  labelSumOut.textContent = `${Math.abs(out).toFixed(2)}€`;
+  labelSumOut.textContent = formatCurrency(
+    Math.abs(out),
+    acc.locale,
+    acc.currency
+  );
 
   // All deposit/income has interest of 1.2 and only interest >1 will be included.
   const interest = acc.movements
@@ -174,7 +261,11 @@ const calcDisplaySummary = function (acc) {
       return int >= 1;
     })
     .reduce((acc, int) => acc + int, 0);
-  labelSumInterest.textContent = `${interest.toFixed(2)}€`;
+  labelSumInterest.textContent = formatCurrency(
+    interest,
+    acc.locale,
+    acc.currency
+  );
 };
 
 // Function to create username for all accounts (pass in array of all account object)
@@ -205,9 +296,41 @@ const updateUI = function (acc) {
   calcDisplaySummary(acc);
 };
 
+// Function to start logout timer
+const startLogoutTimer = function () {
+  // Set the logout timer in seconds
+  let time = 150;
+
+  // Callback function for interval
+  const tick = function () {
+    // Structure seconds in min:sec format
+    const min = String(Math.trunc(time / 60)).padStart(2, 0);
+    const sec = String(time % 60).padStart(2, 0);
+    labelTimer.textContent = `${min}:${sec}`;
+
+    // Check if timer is 0, if it is, reset default and clear timer
+    if (time === 0) {
+      clearInterval(timer);
+      labelWelcome.textContent = "Log in to get started";
+      containerApp.style.opacity = 0;
+    }
+
+    // Reduce the time count every n second specified by setInterval function
+    time--;
+  };
+
+  // Call it once so it starts immediately
+  tick();
+  // Then call it again every 1s
+  const timer = setInterval(tick, 1000);
+
+  return timer;
+};
+
+///////////////////////////////////////////////////////////////////////
 // Event handler
 // Current account variable for functions
-let currentAccount;
+let currentAccount, timer;
 
 btnLogin.addEventListener("click", function (e) {
   e.preventDefault();
@@ -230,9 +353,47 @@ btnLogin.addEventListener("click", function (e) {
       currentAccount.owner.split(" ")[0]
     }`;
 
+    // Calculat & display date and time on login w/ Intl api
+    const now = new Date();
+    const options = {
+      hour: "numeric",
+      minute: "numeric",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      weekday: "short",
+    };
+
+    // use this when we want to use user locale
+    // const locale = navigator.language;
+
+    labelDate.textContent = new Intl.DateTimeFormat(
+      currentAccount.locale,
+      options
+    ).format(now);
+
+    // old manual function w/o internalizing
+    /* 
+    const now = new Date();
+    const date = `${now.getDate()}`.padStart(2, 0);
+    // take note that month is 0 base, so need to +1
+    const month = `${now.getMonth() + 1}`.padStart(2, 0);
+    const year = now.getFullYear();
+    // days start with sun at index 0
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const day = now.getDay();
+    const hour = `${now.getHours()}`.padStart(2, 0);
+    const minute = `${now.getMinutes() + 1}`.padStart(2, 0);
+    labelDate.textContent = `${days[day]}, ${date}/${month}/${year}, ${hour}:${minute}`;
+    */
+
     // Update UI
     updateUI(currentAccount);
     sorted = false;
+
+    // Start logout timer if no existing timer; if there is, clear first, then start a new one
+    if (timer) clearInterval(timer);
+    timer = startLogoutTimer();
   }
 });
 
@@ -270,6 +431,10 @@ btnTransfer.addEventListener("click", function (e) {
   } else {
     console.log(`Transfer failed`);
   }
+
+  // Reset timer whenever button is clicked
+  clearInterval(timer);
+  timer = startLogoutTimer();
 });
 
 btnLoan.addEventListener("click", function (e) {
@@ -281,14 +446,21 @@ btnLoan.addEventListener("click", function (e) {
     loanAmount > 0 &&
     currentAccount.movements.some((mov) => mov >= 0.1 * loanAmount)
   ) {
-    // Add the amount to the acccount and update ui
-    currentAccount.movements.push(loanAmount);
-    currentAccount.movementsDates.push(new Date().toISOString());
-    updateUI(currentAccount);
+    // Add a timeout to simulate loan approval after 3secons
+    setTimeout(function () {
+      // Add the amount to the acccount and update ui
+      currentAccount.movements.push(loanAmount);
+      currentAccount.movementsDates.push(new Date().toISOString());
+      updateUI(currentAccount);
+    }, 3000);
   }
 
   // Clear input fields
   inputLoanAmount.value = "";
+
+  // Reset timer whenever button is clicked
+  clearInterval(timer);
+  timer = startLogoutTimer();
 });
 
 btnClose.addEventListener("click", function (e) {
@@ -325,17 +497,3 @@ btnSort.addEventListener("click", function (e) {
   displayMovement(currentAccount, !sorted);
   sorted = !sorted;
 });
-
-// Other minor stuff like dates and timer
-// Date implementation
-const now = new Date();
-const date = `${now.getDate()}`.padStart(2, 0);
-// take note that month is 0 base, so need to +1
-const month = `${now.getMonth() + 1}`.padStart(2, 0);
-const year = now.getFullYear();
-// days start with sun at index 0
-const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const day = now.getDay();
-const hour = `${now.getHours()}`.padStart(2, 0);
-const minute = `${now.getMinutes() + 1}`.padStart(2, 0);
-labelDate.textContent = `${days[day]}, ${date}/${month}/${year}, ${hour}:${minute}`;
